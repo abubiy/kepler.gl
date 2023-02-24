@@ -512,6 +512,8 @@ export function analyzerTypeToFieldType(aType: string): string {
   switch (aType) {
     case DATE:
       return ALL_FIELD_TYPES.date;
+    case undefined:
+      return ALL_FIELD_TYPES.string;
     case TIME:
     case DATETIME:
       return ALL_FIELD_TYPES.timestamp;
