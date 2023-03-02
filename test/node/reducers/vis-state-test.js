@@ -1191,29 +1191,25 @@ test('#visStateReducer -> DUPLICATE_LAYER', t => {
 
 test('#visStateReducer -> UPDATE_VIS_DATA.1 -> No data', t => {
   const oldState = CloneDeep(InitialState).visState;
+  const nextState1 = reducer(oldState, VisStateActions.updateVisData([{info: null, data: null}]));
+  t.deepEqual(nextState1, oldState, 'should return current state if no data');
 
-  t.deepEqual(
-    reducer(oldState, VisStateActions.updateVisData([{info: null, data: null}])),
+  const nextState2 = reducer(
     oldState,
-    'should return current state if no data'
-  );
-
-  t.deepEqual(
-    reducer(
-      oldState,
-      VisStateActions.updateVisData([
-        {
-          data: {
-            fields: null,
-            rows: [1, 2]
-          }
+    VisStateActions.updateVisData([
+      {
+        data: {
+          fields: null,
+          rows: [1, 2]
         }
-      ])
-    ),
-    oldState,
-    'should return current state if no fields'
+      }
+    ])
   );
+  t.deepEqual(nextState2, oldState, 'should return current state if no fields');
 
+  Object.keys(oldState).forEach(prop => {
+    t.deepEqual(nextState2[prop], oldState[prop], `${prop} should be the same`);
+  });
   t.deepEqual(
     reducer(
       oldState,
@@ -1401,7 +1397,10 @@ test('#visStateReducer -> UPDATE_VIS_DATA.3 -> merge w/ existing state', t => {
     datasets: {
       snowflake
     },
-    filters: [{name: 'hello'}, {name: 'world'}],
+    filters: [
+      {name: 'hello', dataId: ['a']},
+      {name: 'world', dataId: ['b']}
+    ],
     interactionConfig: {
       tooltip: {
         id: 'tooltip',
@@ -2139,6 +2138,79 @@ test('#visStateReducer -> RENAME_DATASET', t => {
   t.end();
 });
 
+test('#visStateReducer -> UPDATE_COLOR_TABLE', t => {
+  const initialState = StateWTripGeojson.visState;
+
+  t.deepEqual(
+    initialState.datasets[tripDataInfo.id].color,
+    [192, 108, 132],
+    'Initial color as expected'
+  );
+
+  const newColor = [255, 255, 255];
+  const updated = reducer(
+    initialState,
+    VisStateActions.updateTableColor(tripDataInfo.id, newColor)
+  );
+
+  assertDatasetIsTable(t, updated.datasets[tripDataInfo.id]);
+  t.equal(updated.datasets[tripDataInfo.id].color, newColor, 'Updated color as expected');
+
+  t.end();
+});
+
+test('#visStateReducer -> UPDATE_TABLE_PROPS', t => {
+  const initialState = StateWTripGeojson.visState;
+
+  // update label
+  t.equal(
+    initialState.datasets[tripDataInfo.id].label,
+    tripDataInfo.label,
+    'Initial label as expected'
+  );
+
+  const newLabel = 'New label!!!11';
+  let updated = reducer(
+    initialState,
+    VisStateActions.updateDatasetProps(tripDataInfo.id, {label: newLabel})
+  );
+
+  assertDatasetIsTable(t, updated.datasets[tripDataInfo.id]);
+  t.equal(updated.datasets[tripDataInfo.id].label, newLabel, 'Updated label as expected');
+
+  // update color
+  t.deepEqual(
+    updated.datasets[tripDataInfo.id].color,
+    [192, 108, 132],
+    'Initial color as expected'
+  );
+
+  const newColor = [255, 255, 255];
+  updated = reducer(
+    updated,
+    VisStateActions.updateDatasetProps(tripDataInfo.id, {color: newColor})
+  );
+  assertDatasetIsTable(t, updated.datasets[tripDataInfo.id]);
+  t.equal(updated.datasets[tripDataInfo.id].label, newLabel, 'Updated color as expected');
+
+  // update meta
+  updated = reducer(
+    updated,
+    VisStateActions.updateDatasetProps(tripDataInfo.id, {metadata: {test: true}})
+  );
+  assertDatasetIsTable(t, updated.datasets[tripDataInfo.id]);
+  t.deepEqual(
+    updated.datasets[tripDataInfo.id].metadata,
+    {
+      ...updated.datasets[tripDataInfo.id].metadata,
+      test: true
+    },
+    'Updated color as expected'
+  );
+
+  t.end();
+});
+
 test('#visStateReducer -> SET_FILTER.name', t => {
   const oldState = CloneDeep(StateWFilters.visState);
   const oldFilter0 = oldState.filters[0];
@@ -2825,7 +2897,7 @@ test('#visStateReducer -> REMOVE_DATASET w filter and layer', t => {
     initialState: oldState.initialState,
     layerToBeMerged: [],
     filterToBeMerged: [],
-    interactionToBeMerged: undefined,
+    interactionToBeMerged: {},
     splitMapsToBeMerged: [],
     editor: oldState.editor,
     mapInfo: {
@@ -2837,7 +2909,8 @@ test('#visStateReducer -> REMOVE_DATASET w filter and layer', t => {
     loaders: oldState.loaders,
     loadOptions: oldState.loadOptions,
     mergers: oldState.mergers,
-    schema: oldState.schema
+    schema: oldState.schema,
+    isMergingDatasets: {}
   };
 
   const newReducer = reducer(oldState, VisStateActions.removeDataset(testCsvDataId));
@@ -3074,7 +3147,7 @@ test('#visStateReducer -> SPLIT_MAP: REMOVE_DATASET', t => {
     initialState: oldState.initialState,
     layerToBeMerged: [],
     filterToBeMerged: [],
-    interactionToBeMerged: undefined,
+    interactionToBeMerged: {},
     splitMapsToBeMerged: [],
     editor: oldState.editor,
     mapInfo: {
@@ -3086,7 +3159,8 @@ test('#visStateReducer -> SPLIT_MAP: REMOVE_DATASET', t => {
     loaders: oldState.loaders,
     loadOptions: oldState.loadOptions,
     schema: oldState.schema,
-    mergers: oldState.mergers
+    mergers: oldState.mergers,
+    isMergingDatasets: {}
   };
 
   const newReducer = reducer(oldState, VisStateActions.removeDataset(testGeoJsonDataId));
@@ -4705,22 +4779,6 @@ test('#visStateReducer -> SORT_TABLE_COLUMN', t => {
     'should correctly sort'
   );
   assertDatasetIsTable(t, nextState5.datasets[testCsvDataId]);
-
-  t.end();
-});
-
-test('#visStateReducer -> updateTableColor', t => {
-  const initialState = CloneDeep(StateWFiles.visState);
-  const newColor = [150, 150, 150];
-
-  const nextState = reducer(
-    initialState,
-    VisStateActions.updateTableColor(testCsvDataId, newColor)
-  );
-
-  // test dataset is table
-  assertDatasetIsTable(t, nextState.datasets[testCsvDataId]);
-  t.deepEqual(nextState.datasets[testCsvDataId].color, newColor, 'should update dataset color');
 
   t.end();
 });
